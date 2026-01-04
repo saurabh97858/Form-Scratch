@@ -1,3 +1,5 @@
+"use client";
+
 // components/SideNav.tsx
 import { Button } from "@/components/ui/button";
 import { LibraryBig, LineChart, MessagesSquare, Shield } from "lucide-react";
@@ -5,10 +7,9 @@ import { usePathname } from "next/navigation";
 import React, { useCallback } from "react";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
-import { db } from "@/config";
-import { JsonForms } from "@/config/schema";
-import { eq, desc } from "drizzle-orm";
+
 import { useUser } from "@clerk/nextjs";
+import { getUserForms } from "@/actions/form";
 
 // Types
 interface MenuItem {
@@ -37,13 +38,6 @@ function SideNav() {
             icons: MessagesSquare,
             path: "/dashboard/responses",
         },
-        {
-            id: 3,
-            name: "Analytics",
-            icons: LineChart,
-            path: "/dashboard/analytics",
-        },
-        { id: 4, name: "Upgrade", icons: Shield, path: "/dashboard/upgrade" },
     ], []);
 
     const { user } = useUser();
@@ -53,19 +47,10 @@ function SideNav() {
 
     const getFormList = useCallback(async () => {
         if (!user?.primaryEmailAddress?.emailAddress) return;
-        
+
         try {
-            const result = await db
-                .select()
-                .from(JsonForms)
-                .where(
-                    eq(
-                        JsonForms.createdBy,
-                        user.primaryEmailAddress.emailAddress
-                    )
-                )
-                .orderBy(desc(JsonForms.id));
-                
+            const result = await getUserForms(user?.primaryEmailAddress?.emailAddress); // Use server action
+
             setFormList(result);
             const perc = (result.length / 3) * 100;
             setPercFileCreated(Math.min(perc, 100));
@@ -82,50 +67,62 @@ function SideNav() {
     }, [user, getFormList]);
 
     const handleCreateForm = () => {
-        // Implement form creation logic here
-        console.log('Create form clicked');
+        // Redirect to dashboard with query param to open modal
+        // This works because FormGenerator listens for ?create=true
+        window.location.href = "/dashboard?create=true";
     };
 
     return (
-        <aside className="h-screen border shadow-md">
-            <nav className="p-5">
+        <aside className="h-screen border-r border-white/20 bg-black/20 backdrop-blur-xl shadow-xl flex flex-col">
+            <div className="p-5 border-b border-white/10">
+                {/* Optional: Add Logo here if needed */}
+                <h1 className="text-white font-bold text-xl tracking-tight">FormScratch</h1>
+            </div>
+
+            <nav className="p-5 flex-1">
+                <div className="mb-6">
+                    <Button
+                        onClick={handleCreateForm}
+                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all duration-300 transform hover:scale-105 border-0"
+                    >
+                        <span className="flex items-center gap-2 font-semibold">
+                            <span className="text-xl leading-none">+</span> Create Form
+                        </span>
+                    </Button>
+                </div>
                 {menuList.map((menu) => (
                     <Link
                         href={menu.path}
                         key={menu.id}
-                        className={`flex items-center gap-3 p-4 mb-3 rounded-lg cursor-pointer text-gray-900 hover:bg-primary hover:text-white transition-colors ${
-                            path === menu.path ? "bg-primary text-white" : ""
-                        }`}
+                        className={`flex items-center gap-3 p-4 mb-3 rounded-lg cursor-pointer transition-all duration-300 md:text-sm lg:text-base group
+                            ${path === menu.path
+                                ? "bg-primary text-white shadow-lg shadow-primary/40 scale-105 font-medium"
+                                : "text-gray-300 hover:bg-white/10 hover:text-white"
+                            }`}
                     >
-                        <menu.icons aria-hidden="true" />
+                        <menu.icons className={`h-5 w-5 ${path === menu.path ? "animate-pulse" : "group-hover:text-white"}`} />
                         <span>{menu.name}</span>
                     </Link>
                 ))}
             </nav>
 
-            <div className="fixed bottom-8 p-6 w-64">
-                <Button 
-                    onClick={handleCreateForm}
-                    className="w-full"
-                >
-                    + Create Form
-                </Button>
-
-                <div className="mt-7">
-                    <Progress 
-                        value={percFileCreated} 
-                        className="h-2"
-                        aria-label="Form creation progress"
+            <div className="p-6">
+                <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-gray-400">Usage</span>
+                        <span className="text-xs text-white font-bold">{Math.round(percFileCreated)}%</span>
+                    </div>
+                    <Progress
+                        value={percFileCreated}
+                        className="h-2 bg-white/20"
+                    // Custom styling for indicator usually handled by class, forcing color here if needed or relying on primary
                     />
-                    <h2 className="mt-2 text-sm text-gray-600">
-                        <strong>{formList.length} </strong>
-                        out of
-                        <strong> 3 </strong>
-                        forms created
+                    <h2 className="mt-2 text-xs text-gray-400">
+                        <strong className="text-white">{formList.length} </strong>
+                        of
+                        <strong className="text-white"> 3 </strong>
+                        forms used
                     </h2>
-                    <p className="mt-3 text-sm text-gray-600">
-                        Upgrade your plan for unlimited AI form building
-                    </p>
                 </div>
             </div>
         </aside>

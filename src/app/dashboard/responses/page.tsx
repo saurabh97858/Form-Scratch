@@ -1,9 +1,6 @@
 "use client";
-
-import { db } from "@/config";
-import { JsonForms } from "@/config/schema";
+import { getUserForms } from "@/actions/form";
 import { useUser } from "@clerk/nextjs";
-import { desc, eq } from "drizzle-orm";
 import React, { useCallback, useEffect, useState } from "react";
 import FormListResponse from "./_component/FormListResponse";
 
@@ -12,35 +9,30 @@ function Page() {
     const [formList, setFormList] = useState<any[]>([]);
 
     const getFormList = useCallback(async () => {
-        if (!user) return; // Ensure user is defined before querying
-        const result = await db
-            .select()
-            .from(JsonForms)
-            .where(
-                eq(
-                    JsonForms.createdBy,
-                    user.primaryEmailAddress?.emailAddress ?? ""
-                )
-            )
-            .orderBy(desc(JsonForms.id));
-        setFormList(result);
-        console.log(result);
+        if (!user?.primaryEmailAddress?.emailAddress) return;
+
+        try {
+            const result = await getUserForms(user.primaryEmailAddress.emailAddress);
+            setFormList(result);
+        } catch (error) {
+            console.error("Error fetching form list:", error);
+        }
     }, [user]);
 
     useEffect(() => {
         getFormList();
-    }, [getFormList]); // Added getFormList to dependency array
+    }, [getFormList]);
 
     return (
-        <div className="p-10">
-            <h2 className="font-bold text-3xl flex items-center justify-between">
+        <div className="p-10 text-white">
+            <h2 className="text-3xl font-bold mb-8 drop-shadow-md">
                 Responses
             </h2>
 
-            <div className="grid grid-cols-1 gap-4 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {formList.map((form) => (
                     <FormListResponse
-                        key={form.id} // Added key prop
+                        key={form.id}
                         formRecord={form}
                         jsonForm={JSON.parse(form.jsonform)}
                     />

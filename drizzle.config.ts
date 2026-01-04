@@ -5,6 +5,6 @@ export default defineConfig({
   schema: "./src/config/schema.ts",
   out: "./drizzle",
   dbCredentials: {
-    url: process.env.NEXT_PUBLIC_DATABASE_URL_CONFIG!
+    url: process.env.NEXT_PUBLIC_DATABASE_URL_CONFIG!.replace(/^psql\s+/, "").replace(/['"]/g, "")
   }
 });

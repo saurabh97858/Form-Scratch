@@ -1,10 +1,8 @@
 "use client";
-import { db } from "@/config";
-import { JsonForms } from "@/config/schema";
 import { useUser } from "@clerk/nextjs";
-import { desc, eq } from "drizzle-orm";
 import React, { useCallback, useEffect, useState } from "react";
 import FormListItem from "./FormListItem";
+import { getUserForms } from "@/actions/form";
 
 function FormList() {
     const { user } = useUser();
@@ -12,18 +10,9 @@ function FormList() {
 
     const getFormList = useCallback(async () => {
         if (!user) return; // Ensure user exists before making the query
-        const result = await db
-            .select()
-            .from(JsonForms)
-            .where(
-                eq(
-                    JsonForms.createdBy,
-                    user.primaryEmailAddress?.emailAddress ?? ""
-                )
-            )
-            .orderBy(desc(JsonForms.id));
+        const result = await getUserForms(user.primaryEmailAddress?.emailAddress ?? "");
         setFormList(result);
-        console.log(result);
+        console.log("Form List:", result);
     }, [user]);
 
     useEffect(() => {

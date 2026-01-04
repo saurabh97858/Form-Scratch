@@ -5,8 +5,8 @@ import FormList from "./_components/FormList";
 function Dashboard() {
     return (
         <div className="p-10">
-            <div className="flex justify-between space-y-4 ">
-                <h2 className="text-3xl font-bold mt-5">DashBoard</h2>
+            <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-bold text-white drop-shadow-md">My Dashboard</h2>
                 <div>
                     <FormGenerator />
                 </div>

@@ -1,10 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { db } from "@/config";
-import { JsonForms } from "@/config/schema";
+import { getFormById, updateForm, updateFormMetadata } from "@/actions/form";
 import { useUser } from "@clerk/nextjs";
-import { eq, and } from "drizzle-orm";
 import { ArrowLeft, Share, SquareArrowOutUpRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState, useCallback } from "react";
@@ -59,31 +57,25 @@ const EditForm: React.FC<EditFormProps> = ({ params }) => {
     const [selectedTheme, setSelectedTheme] = useState("light");
     const [selectedBackground, setSelectedBackground] = useState<string>("");
 
+    // Moved to Server Action usage
     const fetchFormData = useCallback(async () => {
         try {
-            const result = await db
-                .select()
-                .from(JsonForms)
-                .where(
-                    and(
-                        eq(JsonForms.id, parseInt(params.formId!)),
-                        eq(
-                            JsonForms.createdBy,
-                            user?.primaryEmailAddress?.emailAddress ?? ""
-                        )
-                    )
-                );
-            setRecord(result[0]);
+            // Use Server Action
+            const result = await getFormById(parseInt(params.formId!));
+
+            setRecord(result as unknown as Record); // Type cast for safety
             setJsonForm(
-                result[0]?.jsonform
-                    ? JSON.parse(result[0].jsonform)
+                result?.jsonform
+                    ? JSON.parse(result.jsonform)
                     : { formTitle: "", formHeading: "", fields: [] }
             );
-            setSelectedBackground(result[0]?.background ?? "");
+            setSelectedBackground(result?.background ?? "");
+            setSelectedTheme(result?.theme ?? "light");
+
         } catch (error) {
             console.error("Error fetching form data:", error);
         }
-    }, [params.formId, user]);
+    }, [params.formId]); // Removed user dependency as action handles verification if needed
 
     useEffect(() => {
         if (user) fetchFormData();
@@ -92,26 +84,14 @@ const EditForm: React.FC<EditFormProps> = ({ params }) => {
     const updateJsonFormDb = useCallback(async () => {
         if (!record) return;
         try {
-            const result = await db
-                .update(JsonForms)
-                .set({
-                    jsonform: JSON.stringify(jsonForm),
-                })
-                .where(
-                    and(
-                        eq(JsonForms.id, record.id),
-                        eq(
-                            JsonForms.createdBy,
-                            user?.primaryEmailAddress?.emailAddress ?? ""
-                        )
-                    )
-                );
+            // Use Server Action
+            await updateForm(record.id, JSON.stringify(jsonForm));
             toast("Form Updated Successfully");
-            console.log(result);
         } catch (error) {
             console.error("Error updating form data:", error);
+            toast("Failed to update form");
         }
-    }, [jsonForm, record, user]);
+    }, [jsonForm, record]);
 
     useEffect(() => {
         if (updateTrigger) {
@@ -145,98 +125,95 @@ const EditForm: React.FC<EditFormProps> = ({ params }) => {
         const themeToSave = columnName === "theme" && !value ? "light" : value;
 
         try {
-            const result = await db
-                .update(JsonForms)
-                .set({
-                    [columnName]: themeToSave,
-                })
-                .where(
-                    and(
-                        eq(JsonForms.id, record?.id ?? 0),
-                        eq(
-                            JsonForms.createdBy,
-                            user?.primaryEmailAddress?.emailAddress ?? ""
-                        )
-                    )
-                );
+            // Use Server Action
+            await updateFormMetadata(record?.id ?? 0, {
+                [columnName]: themeToSave
+            });
+
             toast("Form Updated Successfully");
         } catch (error) {
             console.error("Error updating controller fields:", error);
+            toast("Failed to update settings");
         }
     };
 
     return (
-        <div className="p-10">
-            <div className="flex justify-between items-center">
-                <h2
-                    className="flex gap-2 items-center my-5 cursor-pointer hover:font-bold"
-                    onClick={() => router.back()}
-                >
-                    <Button>
-                        <ArrowLeft /> Back
-                    </Button>
-                </h2>
-                <div className="flex gap-2">
-                    <Link href={`/aiform/` + record?.id} target="_blank">
-                        <Button className="flex gap-2">
-                            <SquareArrowOutUpRight className="h-5 w-5 " /> Live
-                            Preview
-                        </Button>
-                    </Link>
+        <div
+            className="p-10 min-h-screen bg-cover bg-center bg-fixed"
+            style={{
+                backgroundImage: "url('/dashboard-bg.png')",
+                backgroundAttachment: "fixed"
+            }}
+        >
+            {/* Dark overlay for readability */}
+            <div className="absolute inset-0 bg-black/50 z-0 fixed pointer-events-none" />
 
-                    <RWebShare
-                        data={{
-                            text:
-                                jsonForm?.formHeading +
-                                ", Build Your Form in Seconds",
-                            url:
-                                process.env.NEXT_PUBLIC_BASE_URL +
-                                "/aiform/" +
-                                record?.id,
-                            title: jsonForm?.formTitle,
-                        }}
-                        onClick={() => console.log("shared successfully!")}
+            <div className="relative z-10 text-white">
+                <div className="flex justify-between items-center">
+                    <h2
+                        className="flex gap-2 items-center my-5 cursor-pointer hover:font-bold transition-all"
+                        onClick={() => router.back()}
                     >
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex gap-2 mb-3 sm:mb-0 w-full sm:w-auto"
-                        >
-                            <Share className="h-5 w-5" /> Share
+                        <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm">
+                            <ArrowLeft className="h-4 w-4 mr-2" /> Back
                         </Button>
-                    </RWebShare>
-                </div>
-            </div>
+                    </h2>
+                    <div className="flex gap-2">
+                        <Link href={`/aiform/` + record?.id} target="_blank">
+                            <Button className="flex gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white shadow-lg shadow-purple-500/30 border-0">
+                                <SquareArrowOutUpRight className="h-5 w-5 " /> Live Preview
+                            </Button>
+                        </Link>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-2">
-                <div className="p-5 border rounded-lg  shadow-md">
-                    <Controller
-                        selectedTheme={(value: any) => {
-                            updateControllerFields(value, "theme");
-                            setSelectedTheme(value);
-                        }}
-                        selectedBackground={(value) => {
-                            updateControllerFields(value, "background");
-                            setSelectedBackground(value);
-                        }}
-                        setSignInEnable={(value: boolean) => {
-                            updateControllerFields(value, "enabelSignIn");
-                        }}
-                    />
+                        <RWebShare
+                            data={{
+                                text: jsonForm?.formHeading + ", Build Your Form in Seconds",
+                                url: process.env.NEXT_PUBLIC_BASE_URL + "/aiform/" + record?.id,
+                                title: jsonForm?.formTitle,
+                            }}
+                            onClick={() => console.log("shared successfully!")}
+                        >
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm"
+                            >
+                                <Share className="h-5 w-5" /> Share
+                            </Button>
+                        </RWebShare>
+                    </div>
                 </div>
-                <div
-                    className="col-span-2 border rounded-lg p-5  flex items-center justify-center"
-                    style={{
-                        backgroundImage: selectedBackground,
-                    }}
-                >
-                    <FormUi
-                        formId={parseInt(params.formId!)}
-                        jsonForm={jsonForm}
-                        selectedTheme={selectedTheme}
-                        onFieldUpdate={onFieldUpdate}
-                        deleteField={(index) => deleteField(index)}
-                    />
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-2">
+                    <div className="p-5 border border-white/20 rounded-xl shadow-xl bg-black/20 backdrop-blur-md">
+                        <Controller
+                            selectedTheme={(value: any) => {
+                                updateControllerFields(value, "theme");
+                                setSelectedTheme(value);
+                            }}
+                            selectedBackground={(value) => {
+                                updateControllerFields(value, "background");
+                                setSelectedBackground(value);
+                            }}
+                            setSignInEnable={(value: boolean) => {
+                                updateControllerFields(value, "enabelSignIn");
+                            }}
+                        />
+                    </div>
+                    <div
+                        className="col-span-2 border border-white/20 rounded-xl p-5 flex items-center justify-center bg-white/5 backdrop-blur-sm shadow-xl min-h-[500px]"
+                        style={{
+                            backgroundImage: selectedBackground,
+                        }}
+                    >
+                        <FormUi
+                            formId={parseInt(params.formId!)}
+                            jsonForm={jsonForm}
+                            selectedTheme={selectedTheme}
+                            onFieldUpdate={onFieldUpdate}
+                            deleteField={(index) => deleteField(index)}
+                        />
+                    </div>
                 </div>
             </div>
         </div>

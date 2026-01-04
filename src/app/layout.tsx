@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-    title: "FormScratch",
+    title: "Make Your Form",
     description: "An AI form Builder",
 };
 
@@ -22,7 +22,7 @@ export default function RootLayout({
             <html lang="en" data-theme="light">
                 <body className={inter.className}>
                     <Header />
-                    <Toaster />
+                    <Toaster theme="light" />
                     {children}
                 </body>
             </html>

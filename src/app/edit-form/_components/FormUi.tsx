@@ -12,10 +12,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import FieldEdit from "./FieldEdit";
-import { db } from "@/config";
-import { userResponses } from "@/config/schema";
-import moment from "moment";
 import { toast } from "sonner";
+import { submitFormResponse } from "@/actions/form";
 import { SignInButton, useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 
@@ -99,19 +97,23 @@ const FormUi: React.FC<FormUiProps> = ({
     };
     const onFormSubmit = async (event: { preventDefault: () => void }) => {
         event.preventDefault();
-        console.log(formData);
+        console.log("Submitting Form Data:", formData);
 
-        const result = await db.insert(userResponses).values({
-            jsonresponse: JSON.stringify(formData),
-            createdAt: moment().format("YYYY-MM-DD"),
-            formRef: formId,
-        });
+        try {
+            const result = await submitFormResponse(formId, JSON.stringify(formData));
 
-        if (result) {
-            formRef.current?.reset();
-            toast("Form submitted successfully");
-        } else {
-            toast("Form submission failed");
+            if (result) {
+                formRef.current?.reset();
+                toast("Form submitted successfully");
+                alert("Success! Form ID " + formId + " submitted.");
+            } else {
+                toast("Form submission failed");
+                alert("Failed: No result returned from server.");
+            }
+        } catch (error) {
+            console.error("Submission Error:", error);
+            toast("Error submitting form");
+            alert("Error: " + (error as Error).message);
         }
     };
     return (
@@ -162,100 +164,100 @@ const FormUi: React.FC<FormUiProps> = ({
                             </Select>
                         </div>
                     ) : // RadioGroup Field
-                    field.fieldType === "RadioGroup" ? (
-                        <div className="my-3 w-full">
-                            <label className="text-xs text-gray-500">
-                                {field.placeholder}
-                            </label>
-                            <RadioGroup>
-                                {field.fieldOptions?.map((option, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="flex items-center space-x-2"
-                                    >
-                                        <RadioGroupItem
-                                            value={option.value}
-                                            id={option.value}
-                                            onClick={() =>
-                                                handleSelectChange(
-                                                    field.fieldName,
-                                                    option.value
-                                                )
-                                            }
-                                        />
-                                        <Label htmlFor={option.value}>
-                                            {option.text}
-                                        </Label>
-                                    </div>
-                                ))}
-                            </RadioGroup>
-                        </div>
-                    ) : field.fieldType === "checkbox" ? (
-                        <div className="my-3 w-full">
-                            <label className="text-xs text-gray-500"> </label>
-                            {field?.label}
-                            {field?.fieldOptions ? (
-                                field?.fieldOptions?.map((item, index) => (
-                                    <div className="flex gap-2" key={index}>
+                        field.fieldType === "RadioGroup" ? (
+                            <div className="my-3 w-full">
+                                <label className="text-xs text-gray-500">
+                                    {field.placeholder}
+                                </label>
+                                <RadioGroup>
+                                    {field.fieldOptions?.map((option, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="flex items-center space-x-2"
+                                        >
+                                            <RadioGroupItem
+                                                value={option.value}
+                                                id={option.value}
+                                                onClick={() =>
+                                                    handleSelectChange(
+                                                        field.fieldName,
+                                                        option.value
+                                                    )
+                                                }
+                                            />
+                                            <Label htmlFor={option.value}>
+                                                {option.text}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </RadioGroup>
+                            </div>
+                        ) : field.fieldType === "checkbox" ? (
+                            <div className="my-3 w-full">
+                                <label className="text-xs text-gray-500"> </label>
+                                {field?.label}
+                                {field?.fieldOptions ? (
+                                    field?.fieldOptions?.map((item, index) => (
+                                        <div className="flex gap-2" key={index}>
+                                            <Checkbox
+                                                onCheckedChange={(
+                                                    checked: boolean
+                                                ) =>
+                                                    handleCheckBoxChange(
+                                                        field.fieldName,
+                                                        item.value,
+                                                        checked
+                                                    )
+                                                }
+                                            />
+                                            <h2>{item.text}</h2>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="flex gap-2">
                                         <Checkbox
-                                            onCheckedChange={(
-                                                checked: boolean
-                                            ) =>
+                                            onCheckedChange={(checked: boolean) =>
                                                 handleCheckBoxChange(
                                                     field.fieldName,
-                                                    item.value,
+                                                    field.fieldName,
                                                     checked
                                                 )
                                             }
                                         />
-                                        <h2>{item.text}</h2>
+                                        <h2>{field.label}</h2>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="flex gap-2">
-                                    <Checkbox
-                                        onCheckedChange={(checked: boolean) =>
-                                            handleCheckBoxChange(
-                                                field.fieldName,
-                                                field.fieldName,
-                                                checked
-                                            )
-                                        }
-                                    />
-                                    <h2>{field.label}</h2>
-                                </div>
-                            )}
-                        </div>
-                    ) : field.fieldType === "Switch" ? (
-                        <div className="flex gap-2 w-full">
-                            <label className="text-xs text-gray-500">
-                                {field.label}
-                            </label>
-                            <Switch
-                                id={field.fieldName}
-                                onCheckedChange={(checked: boolean) =>
-                                    handleSwitchChange(field.fieldName, checked)
-                                }
-                            />
-                        </div>
-                    ) : (
-                        // Input Field
-                        <div className="my-3 w-full">
-                            <label className="text-xs text-gray-500 ">
-                                {field.label}
-                            </label>
-                            <Input
-                                type={
-                                    field.fieldType === "Input"
-                                        ? "text"
-                                        : undefined
-                                }
-                                placeholder={field.placeholder}
-                                name={field.fieldName}
-                                onChange={(e) => handleInputChange(e)}
-                            />
-                        </div>
-                    )}
+                                )}
+                            </div>
+                        ) : field.fieldType === "Switch" ? (
+                            <div className="flex gap-2 w-full">
+                                <label className="text-xs text-gray-500">
+                                    {field.label}
+                                </label>
+                                <Switch
+                                    id={field.fieldName}
+                                    onCheckedChange={(checked: boolean) =>
+                                        handleSwitchChange(field.fieldName, checked)
+                                    }
+                                />
+                            </div>
+                        ) : (
+                            // Input Field
+                            <div className="my-3 w-full">
+                                <label className="text-xs text-gray-500 ">
+                                    {field.label}
+                                </label>
+                                <Input
+                                    type={
+                                        field.fieldType === "Input"
+                                            ? "text"
+                                            : undefined
+                                    }
+                                    placeholder={field.placeholder}
+                                    name={field.fieldName}
+                                    onChange={(e) => handleInputChange(e)}
+                                />
+                            </div>
+                        )}
                     {editable && (
                         <div>
                             <FieldEdit

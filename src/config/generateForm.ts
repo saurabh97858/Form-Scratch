@@ -15,7 +15,7 @@ if (!apiKey) {
 const genAI = new GoogleGenerativeAI(apiKey);
 
 const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.5-flash",
 });
 
 const generationConfig = {
@@ -30,7 +30,15 @@ export async function generateForm(
     prevState: { message: string },
     formData: FormData
 ) {
-    const user = await currentUser();
+    console.log("--- generateForm SERVER ACTION STARTED ---");
+    let user;
+    try {
+        user = await currentUser();
+        console.log("User Found:", user?.id);
+    } catch (e) {
+        console.error("Clerk Error:", e);
+        return { message: "Authentication Failed: " + (e as Error).message };
+    }
 
     const schema = z.object({
         description: z.string().min(1),
@@ -58,19 +66,31 @@ export async function generateForm(
         "Based on the description, generate a JSON object that represents a form with an array of fields and there will be a form title and form heading also. Each question should have 'placeholder' , 'label', 'field name','field title' and 'fieldType' properties, where fieldType can be 'RadioGroup', 'Select', 'Input', 'Textarea', or 'Switch'. For 'RadioGroup' and 'Select' types, include an additional 'fieldOption' array with objects containing 'text' and 'value' fields. For 'Input', 'Textarea', and 'Switch' types, the field options array should be empty.";
 
     try {
-        const chatSession = model.startChat({
-            generationConfig,
-            history: [],
-        });
-
-        const result = await chatSession.sendMessage(
+        const result = await model.generateContent(
             `${data.description} ${promptExplain}`
         );
         revalidatePath("/");
 
+        const text = result.response.text();
+        console.log("RAW AI RESPONSE:", text);
+
+        // Robust JSON extraction
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+
+        if (start === -1 || end === -1) {
+            console.error("No JSON Object found in response");
+            return {
+                message: "AI failed to generate valid JSON",
+            };
+        }
+
+        const cleanText = text.substring(start, end + 1);
+        console.log("Cleaned JSON Candidate:", cleanText);
+
         let jsonResponse: any;
         try {
-            jsonResponse = JSON.parse(await result.response.text());
+            jsonResponse = JSON.parse(cleanText);
         } catch (parseError) {
             console.error("Failed to parse response as JSON", parseError);
             return {
@@ -78,26 +98,33 @@ export async function generateForm(
             };
         }
 
-        const resp = await db
-            .insert(JsonForms)
-            .values({
-                jsonform: JSON.stringify(jsonResponse),
-                background: "", 
-                style: "", 
-                createdBy: user?.primaryEmailAddress?.emailAddress ?? "",
-                createdAt: moment().toISOString(),
-            })
-            .returning({ id: JsonForms.id });
-        console.log("new Form ID", resp[0].id);
+        try {
+            const resp = await db
+                .insert(JsonForms)
+                .values({
+                    jsonform: JSON.stringify(jsonResponse),
+                    background: "",
+                    style: "",
+                    createdBy: user?.primaryEmailAddress?.emailAddress ?? "",
+                    createdAt: moment().toISOString(),
+                })
+                .returning({ id: JsonForms.id });
+            console.log("new Form ID", resp[0].id);
 
-        return {
-            message: "Form created successfully",
-            formId: resp[0].id,
-        };
+            return {
+                message: "Form created successfully",
+                formId: resp[0].id,
+            };
+        } catch (dbError) {
+            console.error("Database Insertion Error:", dbError);
+            return {
+                message: "DB Connection Failed: " + (dbError as any).message,
+            };
+        }
     } catch (error) {
-        console.log(error);
+        console.error("CRITICAL ERROR in generateForm:", error);
         return {
-            message: "Failed to create form",
+            message: "Internal Server Error: " + (error as Error).message,
         };
     }
 }
